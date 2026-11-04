@@ -27,14 +27,14 @@ function rsNode(n, o = {}) {
   const {
     color = C.grey, opacity = 1, scale = 1, glow = 0, shakeX = 0,
     cards = [], label = '', labelColor = C.muted, label2 = null, label2Color = C.green, labelMix = 0,
-    crack = 0, x = 0,
+    crack = 0, x = 0, cardOpacity = 1,
   } = o;
   if (opacity <= 0.001 || scale <= 0.001) return '';
   let s = cyl(n.x, n.y, { w: NW, h: NH, color, opacity, scale, glow, shakeX });
   const layout = cards.map(c => c.lines);
   cards.forEach((c, i) => {
     const sp = slot(n, layout, i);
-    s += card(sp.x + shakeX, sp.y, c.lines, { opacity: opacity * (c.opacity ?? 1), scale: scale * (c.scale ?? 1), hl: c.hl || 0, hlLine: c.hlLine ?? -1 });
+    s += card(sp.x + shakeX, sp.y, c.lines, { opacity: opacity * cardOpacity * (c.opacity ?? 1), scale: scale * (c.scale ?? 1), hl: c.hl || 0, hlLine: c.hlLine ?? -1 });
   });
   if (crack > 0.001) {
     const pts = [P(n.x - 30, n.y - 150), P(n.x + 10, n.y - 85), P(n.x - 25, n.y - 30), P(n.x + 30, n.y + 25), P(n.x + 5, n.y + 80)];
@@ -43,8 +43,12 @@ function rsNode(n, o = {}) {
   }
   if (x > 0.001) s += xMark(n.x, n.y + 5, 130, x, { width: 20 });
   const ly = cylLabelY(n.y, { w: NW, h: NH, scale });
-  if (label) s += text(n.x, ly, label, { size: 32, weight: 700, color: labelColor, opacity: opacity * (1 - labelMix), ls: 1 });
-  if (label2) s += text(n.x, ly, label2, { size: 32, weight: 700, color: label2Color, opacity: opacity * labelMix, ls: 1 });
+  const lc = label2 ? mix(labelColor, label2Color, labelMix) : labelColor;
+  const pop = 1 + 0.14 * Math.sin(Math.PI * clamp(labelMix));
+  s += `<g transform="translate(${n.x},${ly}) scale(${pop}) translate(${-n.x},${-ly})">`;
+  if (label) s += text(n.x, ly, label, { size: 32, weight: 700, color: lc, opacity: opacity * clamp(1 - labelMix * 1.6), ls: 1 });
+  if (label2) s += text(n.x, ly, label2, { size: 32, weight: 700, color: lc, opacity: opacity * clamp((labelMix - 0.35) * 1.6), ls: 1 });
+  s += '</g>';
   return s;
 }
 
@@ -373,7 +377,7 @@ SCENES.push({
     const shake = t > CRASH && t < CRASH + 0.8 ? Math.sin((t - CRASH) * 70) * 9 * (1 - (t - CRASH) / 0.8) : 0;
     s += rsNode(NP, {
       color: mix(C.green, C.orange, down), label: 'PRIMARY', labelColor: C.green, label2: 'DOWN', label2Color: C.orange,
-      labelMix: tw(t, 3.4, 4.0), cards: pCards, crack: tw(t, 3.3, 3.8), x: tw(t, 3.6, 4.3), shakeX: shake,
+      labelMix: tw(t, 3.4, 4.2), cards: pCards, cardOpacity: 1 - 0.7 * tw(t, 3.0, 3.4), crack: tw(t, 3.45, 3.95), x: tw(t, 3.75, 4.35), shakeX: shake,
       opacity: 1 - 0.35 * tw(t, 5, 6),
     });
     // ribbon
@@ -383,7 +387,7 @@ SCENES.push({
     // secondary S1 receives ORD-10002 just in time, S2 does not
     const s1Cards = [{ lines: CARD1_PAID }];
     if (t >= 2.9) s1Cards.push({ lines: CARD2, scale: tw(t, 2.9, 3.4, backOut) });
-    const elect = tw(t, 9.8, 10.8);
+    const elect = tw(t, 9.8, 11.2);
     s += rsNode(NS1, { color: mix(C.grey, C.green, elect), label: 'SECONDARY', label2: 'PRIMARY', label2Color: C.green, labelMix: elect, cards: s1Cards, glow: env(t, 9.8, 12.5, 0.5) });
     s += rsNode(NS2, { color: C.grey, label: 'SECONDARY', cards: [{ lines: CARD1_PAID }] });
 
@@ -415,27 +419,24 @@ SCENES.push({
     s += memberOplog(PANEL_S2, [{ text: S1_OPLOG[0] }, { text: S1_OPLOG[1] }], { opacity: po });
     s += tag(PANEL_S1.x + PANEL_S1.w / 2, PANEL_S1.y - 30, 'newest ✓', { size: 26, fill: C.green, opacity: tw(t, 6.4, 6.9), scale: tw(t, 6.4, 6.9, backOut) });
 
-    // ballots
-    const bo = env(t, 7.0, 10.8, 0.4);
-    const box = P(520, 452);
-    s += ballot(box.x, box.y, { opacity: bo, scale: tw(t, 7.0, 7.4, backOut) });
-    // S1 votes for itself
-    const v1 = tw(t, 7.8, 8.4);
-    if (t > 7.1 && t < 8.45) s += ballotPaper(box.x, lerp(392, 438, v1), { opacity: tw(t, 7.1, 7.4) * (1 - tw(t, 8.3, 8.45)), scale: tw(t, 7.1, 7.5, backOut) });
-    // S2 vote flies over
-    const v2 = tw(t, 7.9, 9.0);
-    if (t > 7.3 && t < 9.05) {
-      const pt = pointAt(qbez(P(1400, 440), P(960, 560), P(box.x, 420)), v2);
-      s += ballotPaper(pt.x, pt.y, { opacity: tw(t, 7.3, 7.6) * (1 - tw(t, 8.9, 9.05)), rot: Math.sin(v2 * Math.PI) * -18, scale: tw(t, 7.3, 7.7, backOut) });
-    }
-    // counter
-    const votes = t >= 9.0 ? 2 : t >= 8.4 ? 1 : 0;
-    const co = env(t, 7.6, 15.5, 0.4);
-    s += text(960, 548, 'votes', { size: 28, weight: 700, color: C.muted, opacity: co });
-    const maj = tw(t, 9.0, 9.4);
-    const cstr = votes === 2 ? '2 / 3 = majority ✓' : `${votes} / 3`;
-    s += text(960, 604, cstr, { size: 50, weight: 700, color: votes === 2 ? C.green : C.text, opacity: co, font: SANS });
-    if (votes === 2) s += `<g opacity="${(1 - maj) * co}">` + ring(P(960, 604), t, 9.0, { color: C.green, r0: 120, r1: 220 }) + '</g>';
+    // ballots: one pops above each surviving node, one by one
+    const bOut = 1 - tw(t, 11.0, 11.5);
+    [[NS1, 7.0, 8.2], [NS2, 7.6, 8.8]].forEach(([n, tp, tc]) => {
+      const sc = tw(t, tp, tp + 0.45, backOut);
+      if (sc <= 0.001) return;
+      const bx = n.x, by = 452;
+      s += `<ellipse cx="${bx}" cy="${by + 6}" rx="70" ry="62" fill="${C.green}" opacity="${0.18 * env(t, tc, tc + 1.0, 0.25) * bOut}"/>`;
+      s += ballotPaper(bx, by - 16, { scale: 0.85 * sc, opacity: bOut });
+      s += ballot(bx, by, { scale: sc, opacity: bOut });
+    });
+    // counter (after both ballots are visible)
+    const votes = t >= 8.8 ? 2 : 1;
+    const co = env(t, 8.2, 15.5, 0.35);
+    s += text(960, 540, 'votes', { size: 40, weight: 700, color: C.muted, opacity: co });
+    const maj = tw(t, 8.8, 9.2);
+    const cstr = votes === 2 ? '2 / 3 = majority ✓' : '1 / 3';
+    s += text(960, 604, cstr, { size: 54, weight: 700, color: votes === 2 ? C.green : C.text, opacity: co, font: SANS });
+    if (votes === 2) s += `<g opacity="${(1 - maj) * co}">` + ring(P(960, 604), t, 8.8, { color: C.green, r0: 120, r1: 220 }) + '</g>';
 
     // timer in the corner
     s += stopwatch(1500, 72, tw(t, 3.2, 10.8, linear), { opacity: tw(t, 3.2, 3.7), done: tw(t, 10.6, 11.0) });
@@ -456,7 +457,7 @@ SCENES.push({
     s += tag(430, 445, '↻ reconnected', { size: 26, anchor: 'start', opacity: tw(t, 1.3, 1.8), scale: tw(t, 1.3, 1.8, backOut) });
     s += heartbeat(HB_S1_S2, t, { pulses: [1.5, 3.5, 5.5].map(x => x - 0.5) });
 
-    s += rsNode(NP, { color: C.orange, label: 'DOWN', labelColor: C.orange, cards: [{ lines: CARD1_PAID }, { lines: CARD2 }], crack: 1, x: 1, opacity: 0.65 });
+    s += rsNode(NP, { color: C.orange, label: 'DOWN', labelColor: C.orange, cards: [{ lines: CARD1_PAID }, { lines: CARD2 }], cardOpacity: 0.3, crack: 1, x: 1, opacity: 0.65 });
     s += `<g opacity="0.35">` + ribbonConnector(1) + oplog(RIBBON.x, RIBBON.y, RIBBON.w, [...RIB_LINES_2, { text: 'insert {order_id: "ORD-10002"}' }], { rows: 3, accent: C.grey }) + '</g>';
 
     const newCards = [{ lines: CARD1_PAID }, { lines: CARD2 }];
@@ -469,8 +470,8 @@ SCENES.push({
 
     // fading election leftovers
     const lo = 1 - tw(t, 0, 0.5);
-    s += text(960, 548, 'votes', { size: 28, weight: 700, color: C.muted, opacity: lo });
-    s += text(960, 604, '2 / 3 = majority ✓', { size: 50, weight: 700, color: C.green, opacity: lo });
+    s += text(960, 540, 'votes', { size: 40, weight: 700, color: C.muted, opacity: lo });
+    s += text(960, 604, '2 / 3 = majority ✓', { size: 54, weight: 700, color: C.green, opacity: lo });
     s += stopwatch(1500, 72, 1, { opacity: lo, done: 1 });
 
     // oplogs
@@ -514,14 +515,14 @@ SCENES.push({
     };
     // left
     const promote = tw(t, 4.8, 5.6);
-    s += nodeL(0, 480, 320, mix(C.green, C.orange, fail), fail > 0.5 ? 'DOWN' : 'PRIMARY', fail > 0.5 ? C.orange : C.green, 0);
+    s += nodeL(0, 480, 320, mix(C.green, mix(C.orange, '#FFFFFF', 0.45), fail), fail > 0.5 ? 'DOWN' : 'PRIMARY', fail > 0.5 ? C.orange : C.green, 0);
     s += xMark(480, 322, 80, tw(t, 2.3, 2.9), { width: 14 });
     s += cyl(310, 600, { ...o, color: mix(C.grey, C.green, promote), scale: tw(t, 0.65, 1.25, backOut), opacity: tw(t, 0.65, 0.9) });
     s += text(310, cylLabelY(600, o) - 4, 'SECONDARY', { size: 26, weight: 700, color: C.muted, opacity: tw(t, 0.65, 0.9) * (1 - promote) });
     s += text(310, cylLabelY(600, o) - 4, 'PRIMARY', { size: 26, weight: 700, color: C.green, opacity: promote });
     s += nodeL(0, 650, 600, C.grey, 'SECONDARY', C.muted, 2);
     // right
-    s += nodeL(0, 1270, 460, mix(C.green, C.orange, fail), fail > 0.5 ? 'DOWN' : 'PRIMARY', fail > 0.5 ? C.orange : C.green, 0);
+    s += nodeL(0, 1270, 460, mix(C.green, mix(C.orange, '#FFFFFF', 0.45), fail), fail > 0.5 ? 'DOWN' : 'PRIMARY', fail > 0.5 ? C.orange : C.green, 0);
     s += xMark(1270, 462, 80, tw(t, 2.3, 2.9), { width: 14 });
     s += nodeL(0, 1610, 460, C.grey, 'SECONDARY', C.muted, 1);
     // verdicts
@@ -529,7 +530,7 @@ SCENES.push({
     s += text(480, 820, '2 / 3 = majority ✓', { size: 54, weight: 700, color: C.green, opacity: v });
     s += text(1440, 820, '1 / 2 = no majority ✗', { size: 54, weight: 700, color: C.orange, opacity: v });
     s += tag(1440, 690, 'no PRIMARY → writes stop', { size: 30, fill: C.orange, opacity: tw(t, 5.0, 5.6), scale: tw(t, 5.0, 5.6, backOut) });
-    s += tag(480, 470, 'new PRIMARY elected', { size: 28, fill: C.green, opacity: tw(t, 5.4, 6.0), scale: tw(t, 5.4, 6.0, backOut) });
+    s += tag(250, 470, 'new PRIMARY elected', { size: 28, fill: C.green, opacity: tw(t, 5.4, 6.0), scale: tw(t, 5.4, 6.0, backOut) });
     return s;
   },
 });
@@ -679,7 +680,7 @@ SCENES.push({
       else pt = pointAt([CARD_REST, P(760, 520), P(1268, SHV[0].y + 40)], tw(t, 5.0, 6.4));
       s += card(pt.x, pt.y, q, { size: 20, scale: tw(t, 1.3, 1.7, backOut) * (1 - 0.4 * tw(t, 6.1, 6.5)), opacity: 1 - tw(t, 6.2, 6.5) });
     }
-    s += tag(895, 690, 'customer_id → A–H → Shard A', { size: 26, font: MONO, fill: C.blue, opacity: env(t, 3.9, 6.2, 0.3) * 1, anchor: 'start' });
+    s += tag(MONGOS.x, 735, 'C-Dana → A–H → Shard A', { size: 26, font: MONO, fill: C.blue, opacity: env(t, 3.9, 6.2, 0.3) });
     s += tag(1035, 300, 'only 1 shard ✓', { size: 30, fill: C.green, opacity: tw(t, 6.6, 7.0), scale: tw(t, 6.6, 7.0, backOut) });
     // result travels back
     if (t > 7.3 && t < 9.3) {
@@ -883,7 +884,7 @@ SCENES.push({
         }
       }
     });
-    s += text(1395, 300, 'change streams', { size: 26, weight: 700, color: C.blue, opacity: tw(t, 4.3, 4.8), italic: true });
+    s += text(1690, 315, 'change streams', { size: 26, weight: 700, color: C.blue, opacity: tw(t, 4.3, 4.8), italic: true });
     // a write flows in at the start
     if (t > 1.8 && t < 3.4) {
       const pth = [P(215, 470), P(330, 470), P(590, 470), P(822, 470)];

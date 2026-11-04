@@ -271,16 +271,28 @@ function oplog(x, y, w, lines, o = {}) {
 }
 function oplogH(rows = 4, lh = 40) { return 54 + rows * lh + 10; }
 
-// caption band at the bottom of every scene
+// caption band at the bottom of every scene (>= 48 px; wraps to two lines)
 function caption(s, opacity = 1) {
   if (!s) return '';
-  let size = 46;
-  // shrink very long lines a little to keep margins
-  const est = s.length * size * 0.47;
-  if (est > 1760) size = Math.floor(size * 1760 / est);
+  const fits = (str, size) => str.length * size * 0.47 <= 1780;
+  let body;
+  if (fits(s, 52)) {
+    body = text(W / 2, 1016, s, { size: 52 });
+  } else {
+    // split at the sentence / separator break closest to the middle, else at a space
+    const mid = s.length / 2;
+    const cands = [];
+    for (const re of [/\. /g, / · /g, /\.\.\./g, /, /g, / /g]) {
+      let m; while ((m = re.exec(s))) cands.push({ i: m.index + m[0].length, pri: [/\. /g, / · /g, /\.\.\./g, /, /g, / /g].findIndex(r => r.source === re.source) });
+      if (cands.length) break;
+    }
+    const parts = i => [s.slice(0, i).trim().replace(/\s*·$/, ''), s.slice(i).trim()];
+    cands.sort((x, y) => Math.max(...parts(x.i).map(l => l.length)) - Math.max(...parts(y.i).map(l => l.length)));
+    const [l1, l2] = parts(cands[0].i);
+    body = text(W / 2, 986, l1, { size: 48 }) + text(W / 2, 1044, l2, { size: 48 });
+  }
   return `<g opacity="${opacity}"><rect x="0" y="952" width="${W}" height="128" fill="${C.soft}"/>` +
-    `<rect x="0" y="952" width="${W}" height="3" fill="${C.line}"/>` +
-    text(W / 2, 1016, s, { size, weight: 400, color: C.text }) + '</g>';
+    `<rect x="0" y="952" width="${W}" height="3" fill="${C.line}"/>` + body + '</g>';
 }
 
 // tiny tag/badge
